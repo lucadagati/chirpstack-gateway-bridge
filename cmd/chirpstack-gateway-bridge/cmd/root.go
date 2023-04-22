@@ -102,6 +102,7 @@ func initConfig() {
 	} else {
 		viper.SetConfigName("chirpstack-gateway-bridge")
 		viper.AddConfigPath(".")
+		viper.AddConfigPath("$HOME/chirpstack-gateway-bridge/packaging/files")
 		viper.AddConfigPath("$HOME/.config/chirpstack-gateway-bridge")
 		viper.AddConfigPath("/etc/chirpstack-gateway-bridge/")
 		if err := viper.ReadInConfig(); err != nil {
