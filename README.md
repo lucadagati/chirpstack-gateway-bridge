@@ -20,11 +20,7 @@ The following integrations are provided:
 * Generic MQTT broker
 * [GCP Cloud IoT Core MQTT Bridge](https://cloud.google.com/iot-core/)
 
-## Architecture
-
-![architecture](https://www.chirpstack.io/static/img/graphs/architecture.dot.png)
-
-### Component links
+## Component links
 
 * [ChirpStack Gateway Bridge](https://www.chirpstack.io/gateway-bridge/)
 * [ChirpStack Network Server](https://www.chirpstack.io/network-server/)
