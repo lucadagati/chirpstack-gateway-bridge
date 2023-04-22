@@ -11,12 +11,23 @@ import (
 )
 
 var (
-	NS_IP_ADDRESS   = "tcp://broker.emqx.io:1883" // Network Server IP address TODO: get parameter (broker_ip_h_ns) through API request
-	GWid            = ""                          // Gateway ID TODO: get parameter (gwid_token) through API request
-	GWid_TOPIC_NAME = ""                          // Topic name TODO: get parameter (gwid_token) through API request
+	NsIpAddress   = "tcp://broker.emqx.io:1883" // Network Server IP address TODO: get parameter (broker_ip_h_ns) through API request
+	GWid          = ""                          // Gateway ID TODO: get parameter (gwid_token) through API request
+	GwidTopicName = ""                          // Topic name TODO: get parameter (gwid_token) through API request
 )
 
 // TODO: implement API listener
+
+// Launch starts the API
+func Launch() func() error {
+	return func() error {
+		go subscribeToTopic("gateway/+/event/up")
+		go subscribeToTopic("gateway/+/event/stats")
+		go subscribeToTopic("gateway/+/state/conn")
+
+		return nil
+	}
+}
 
 // onMessage handles incoming MQTT messages from a broker. It first decodes the message payload and
 // logs the details of the received message. It then checks if the payload is a JSON object, modifies it by replacing
@@ -46,7 +57,7 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 	topicName := strings.Split(msg.Topic(), "/")[1]
 	topicType := strings.Split(msg.Topic(), "/")[len(strings.Split(msg.Topic(), "/"))-1]
 	log.Println(msg.Topic())
-	newTopic := strings.Replace(msg.Topic(), topicName, GWid_TOPIC_NAME, 1)
+	newTopic := strings.Replace(msg.Topic(), topicName, GwidTopicName, 1)
 
 	// Handle different topic types
 	if topicType == "up" {
@@ -84,17 +95,17 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 // subscribeToTopic subscribes an MQTT client to a specific topic
 func subscribeToTopic(topic string) {
 	// Create a new MQTT client instance
-	clientOpts := mqtt.NewClientOptions().AddBroker("tcp://127.0.0.1:1883")
+	clientOpts := mqtt.NewClientOptions().AddBroker("tcp://broker.emqx.io:1883")
 	client := mqtt.NewClient(clientOpts)
 
 	// Connect to the MQTT broker
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		log.WithError(token.Error()).Fatal("error connecting to MQTT broker")
 	}
 
 	// Subscribe to the specified topic
 	if token := client.Subscribe(topic, 0, onMessage); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		log.WithError(token.Error()).Fatal("error subscribing to topic")
 	}
 
 	// Wait for a signal to exit
