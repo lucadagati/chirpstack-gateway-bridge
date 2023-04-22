@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/brocaar/chirpstack-gateway-bridge/internal/api"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,6 +35,7 @@ func run(cmd *cobra.Command, args []string) error {
 		setupCommands,
 		startIntegration,
 		startBackend,
+		api.Launch(),
 	}
 
 	for _, t := range tasks {
