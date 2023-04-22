@@ -35,11 +35,6 @@ func Launch() func() error {
 func onMessage(client mqtt.Client, msg mqtt.Message) {
 	// Decode payload and print message details
 	payload := string(msg.Payload())
-	log.WithFields(log.Fields{
-		"package": "mqtt",
-		"topic":   msg.Topic(),
-		"payload": payload,
-	}).Info("Received message on topic: " + msg.Topic() + " with payload: " + payload)
 
 	// Check if the payload is a JSON object
 	var payloadMap map[string]interface{}
@@ -50,6 +45,12 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 			"payload": payload,
 			"error":   err.Error(),
 		}).Warn("Failed to parse payload as JSON")
+	} else {
+		log.WithFields(log.Fields{
+			"package": "mqtt",
+			"topic":   msg.Topic(),
+			"payload": payload,
+		}).Info("Received message on topic: " + msg.Topic() + " with payload: " + payload)
 	}
 
 	modifyMap(payloadMap, "gatewayID", GWid)
