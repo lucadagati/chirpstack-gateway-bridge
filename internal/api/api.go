@@ -21,8 +21,8 @@ var (
 // Launch starts the API
 func Launch() func() error {
 	return func() error {
-		go subscribeToTopic("gateway/+/event/up")
-		go subscribeToTopic("gateway/+/event/stats")
+		//go subscribeToTopic("gateway/+/event/up")
+		//go subscribeToTopic("gateway/+/event/stats")
 		go subscribeToTopic("gateway/+/state/conn")
 
 		return nil
@@ -35,14 +35,21 @@ func Launch() func() error {
 func onMessage(client mqtt.Client, msg mqtt.Message) {
 	// Decode payload and print message details
 	payload := string(msg.Payload())
-	log.Printf("Received message on topic: %s with payload: %s", msg.Topic(), payload)
+	log.WithFields(log.Fields{
+		"package": "mqtt",
+		"topic":   msg.Topic(),
+		"payload": payload,
+	}).Info("Received message on topic: " + msg.Topic() + " with payload: " + payload)
 
 	// Check if the payload is a JSON object
 	var payloadMap map[string]interface{}
-	err := json.Unmarshal([]byte(payload), &payloadMap)
-	if err != nil {
-		log.Println(err)
-		return
+	if err := json.Unmarshal([]byte(payload), &payloadMap); err != nil {
+		log.WithFields(log.Fields{
+			"package": "mqtt",
+			"topic":   msg.Topic(),
+			"payload": payload,
+			"error":   err.Error(),
+		}).Warn("Failed to parse payload as JSON")
 	}
 
 	modifyMap(payloadMap, "gatewayID", GWid)
@@ -61,41 +68,80 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 
 	// Handle different topic types
 	if topicType == "up" {
-		log.Println("event UP")
-		payloadMap := make(map[string]interface{})
-		err := json.Unmarshal([]byte(payload), &payloadMap)
-		if err != nil {
-			log.Println(err)
+		log.WithFields(log.Fields{
+			"package": "mqtt",
+			"topic":   msg.Topic(),
+			"payload": payload,
+		}).Info("Handling event UP")
+		payloadMap = make(map[string]interface{})
+		if err = json.Unmarshal([]byte(payload), &payloadMap); err != nil {
+			log.WithFields(log.Fields{
+				"package": "mqtt",
+				"topic":   msg.Topic(),
+				"payload": payload,
+				"error":   err.Error(),
+			}).Error("Failed to decode LoRa packet")
 			return
 		}
 		payloadPHY := payloadMap["phyPayload"].(string)
 		decodedPacket := getDevAddr([]byte(payloadPHY))
 		log.Println("Decoded packet devAddr:", decodedPacket)
 	} else if topicType == "stats" {
-		log.Println("event STATS")
+		log.WithFields(log.Fields{
+			"package": "mqtt",
+			"topic":   msg.Topic(),
+			"payload": payload,
+		}).Info("Handling event STATS")
+		// TODO: handle stats event
 	} else if topicType == "conn" {
-		log.Println("state CONN")
+		log.WithFields(log.Fields{
+			"package": "mqtt",
+			"topic":   msg.Topic(),
+			"payload": payload,
+		}).Info("Handling state CONN")
+		// TODO: handle connection state event
+	} else {
+		log.WithFields(log.Fields{
+			"package": "mqtt",
+			"topic":   msg.Topic(),
+			"payload": payload,
+		}).Warn("Unknown topic type")
 	}
 
 	// Publish message to NS and print details
-	clientOpts := mqtt.NewClientOptions()
+	clientOpts := mqtt.NewClientOptions().AddBroker(NsIpAddress)
 	publishClient := mqtt.NewClient(clientOpts)
 	if token := publishClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Println(token.Error())
+		log.WithFields(log.Fields{
+			"package": "mqtt",
+			"topic":   msg.Topic(),
+			"error":   token.Error(),
+		}).Error("Failed to connect to NS broker")
 		return
 	}
 	if token := publishClient.Publish(newTopic, 0, false, payload); token.Wait() && token.Error() != nil {
-		log.Println(token.Error())
+		log.WithFields(log.Fields{
+			"package": "mqtt",
+			"topic":   msg.Topic(),
+			"payload": payload,
+			"error":   token.Error(),
+		}).Error("Failed to publish message to NS broker")
 		return
 	}
-	log.Printf("Forwarded message on topic: %s with payload: %s", newTopic, payload)
-	publishClient.Disconnect(0)
+
+	log.WithFields(log.Fields{
+		"package": "mqtt",
+		"topic":   msg.Topic(),
+		"payload": payload,
+	}).Info("Forwarded message on topic: " + newTopic + " with payload: " + payload)
+
+	publishClient.Disconnect(250)
 }
 
 // subscribeToTopic subscribes an MQTT client to a specific topic
 func subscribeToTopic(topic string) {
 	// Create a new MQTT client instance
-	clientOpts := mqtt.NewClientOptions().AddBroker("tcp://broker.emqx.io:1883")
+	clientOpts := mqtt.NewClientOptions().AddBroker("tcp://127.0.0.1:1883")
 	client := mqtt.NewClient(clientOpts)
 
 	// Connect to the MQTT broker
