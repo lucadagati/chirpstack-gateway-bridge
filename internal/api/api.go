@@ -2,31 +2,77 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 )
 
-var (
-	NsIpAddress   = "tcp://broker.emqx.io:1883" // Network Server IP address TODO: get parameter (broker_ip_h_ns) through API request
-	GWid          = ""                          // Gateway ID TODO: get parameter (gwid_token) through API request
-	GwidTopicName = ""                          // Topic name TODO: get parameter (gwid_token) through API request
-)
+type Body struct {
+	AddedBroker string `json:"added_broker"`
+	BrokerIPHNS string `json:"broker_ip_h_ns"`
+	GWIDToken   string `json:"gwid_token"`
+}
 
-// TODO: implement API listener
+var (
+	NsIpAddress   = ""     // Network Server IP address TODO: get parameter (broker_ip_h_ns) through API request
+	GWid          = ""     // Gateway ID TODO: get parameter (gwid_token) through API request
+	GwidTopicName = ""     // Topic name TODO: get parameter (gwid_token) through API request
+	port          = "3000" // Server listener port
+)
 
 // Launch starts the API
 func Launch() func() error {
 	return func() error {
-		//go subscribeToTopic("gateway/+/event/up")
-		//go subscribeToTopic("gateway/+/event/stats")
-		go subscribeToTopic("gateway/+/state/conn")
+		go startListener(port)
+		// go subscribeToTopic("gateway/+/event/up")
+		// go subscribeToTopic("gateway/+/event/stats")
+		// go subscribeToTopic("gateway/+/state/conn")
 
 		return nil
 	}
+}
+
+// startListener start a Listener on specified port to serve requests
+func startListener(port string) {
+	http.HandleFunc("/", handleRequest)
+	log.Printf("Listening on port %s...\n", port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
+}
+
+func handleRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	var b Body
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Received request with added_broker=%s, broker_ip_h_ns=%s, gwid_token=%s\n",
+		b.AddedBroker, b.BrokerIPHNS, b.GWIDToken)
+
+	// TODO: Handle request here
+
+	response := map[string]string{
+		"status": "ok",
+	}
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonResponse)
 }
 
 // onMessage handles incoming MQTT messages from a broker. It first decodes the message payload and
