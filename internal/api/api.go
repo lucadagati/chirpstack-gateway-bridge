@@ -46,11 +46,13 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 			"error":   err.Error(),
 		}).Warn("Failed to parse payload as JSON")
 	} else {
-		log.WithFields(log.Fields{
-			"package": "mqtt",
-			"topic":   msg.Topic(),
-			"payload": payload,
-		}).Info("Received message on topic: " + msg.Topic() + " with payload: " + payload)
+		if len(payload) > 0 {
+			log.WithFields(log.Fields{
+				"package": "mqtt",
+				"topic":   msg.Topic(),
+				"payload": payload,
+			}).Info("Received message on topic: " + msg.Topic() + " with payload: " + payload)
+		}
 	}
 
 	modifyMap(payloadMap, "gatewayID", GWid)
