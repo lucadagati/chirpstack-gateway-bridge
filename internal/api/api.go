@@ -20,6 +20,7 @@ type Body struct {
 
 var (
 	NsIpAddress   = ""     // Network Server IP address TODO: get parameter (broker_ip_h_ns) through API request
+	AddedBroker   = ""     // Added broker IP address TODO: get parameter (added_broker) through API request
 	GWid          = ""     // Gateway ID TODO: get parameter (gwid_token) through API request
 	GwidTopicName = ""     // Topic name TODO: get parameter (gwid_token) through API request
 	port          = "3000" // Server listener port
@@ -29,10 +30,11 @@ var (
 func Launch() func() error {
 	return func() error {
 		go startListener(port)
+
+		// DEBUG
 		// go subscribeToTopic("gateway/+/event/up")
 		// go subscribeToTopic("gateway/+/event/stats")
 		// go subscribeToTopic("gateway/+/state/conn")
-
 		return nil
 	}
 }
@@ -44,6 +46,8 @@ func startListener(port string) {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 }
 
+// handleRequest handles API POST requests, taking a JSON object with three parameters:
+// added_broker (AddedBroker), broker_ip_h_ns (BrokerIPHNS), gwid_token (GWIDToken)
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -59,6 +63,17 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received request with added_broker=%s, broker_ip_h_ns=%s, gwid_token=%s\n",
 		b.AddedBroker, b.BrokerIPHNS, b.GWIDToken)
 
+	// Assignment
+	NsIpAddress = b.BrokerIPHNS
+	AddedBroker = b.AddedBroker
+	GWid = b.GWIDToken
+	GwidTopicName = b.GWIDToken
+	log.WithFields(log.Fields{
+		"ip":    NsIpAddress,
+		"gwid":  GWid,
+		"topic": GwidTopicName,
+	}).Info("IP: " + NsIpAddress + "\nGWid: " + GWid + "\nTopic name: " + GwidTopicName)
+
 	// TODO: Handle request here
 
 	response := map[string]string{
@@ -73,6 +88,10 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
+
+	go subscribeToTopic("gateway/+/event/up")
+	go subscribeToTopic("gateway/+/event/stats")
+	go subscribeToTopic("gateway/+/state/conn")
 }
 
 // onMessage handles incoming MQTT messages from a broker. It first decodes the message payload and
@@ -85,12 +104,13 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 	// Check if the payload is a JSON object
 	var payloadMap map[string]interface{}
 	if err := json.Unmarshal([]byte(payload), &payloadMap); err != nil {
-		log.WithFields(log.Fields{
+		log.WithError(err).Warn("Failed to parse payload as JSON")
+		/* log.WithFields(log.Fields{
 			"package": "mqtt",
 			"topic":   msg.Topic(),
 			"payload": payload,
 			"error":   err.Error(),
-		}).Warn("Failed to parse payload as JSON")
+		}).Warn("Failed to parse payload as JSON") */
 	} else {
 		if len(payload) > 0 {
 			log.WithFields(log.Fields{
@@ -132,9 +152,11 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 			}).Error("Failed to decode LoRa packet")
 			return
 		}
-		payloadPHY := payloadMap["phyPayload"].(string)
-		decodedPacket := getDevAddr([]byte(payloadPHY))
-		log.Println("Decoded packet devAddr:", decodedPacket)
+		if payloadMap["phyPayload"] != nil {
+			payloadPHY := payloadMap["phyPayload"].(string)
+			decodedPacket := getDevAddr([]byte(payloadPHY))
+			log.Println("Decoded packet devAddr:", decodedPacket)
+		}
 	} else if topicType == "stats" {
 		log.WithFields(log.Fields{
 			"package": "mqtt",
@@ -190,7 +212,7 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 // subscribeToTopic subscribes an MQTT client to a specific topic
 func subscribeToTopic(topic string) {
 	// Create a new MQTT client instance
-	clientOpts := mqtt.NewClientOptions().AddBroker("tcp://127.0.0.1:1883")
+	clientOpts := mqtt.NewClientOptions().AddBroker(AddedBroker)
 	client := mqtt.NewClient(clientOpts)
 
 	// Connect to the MQTT broker
