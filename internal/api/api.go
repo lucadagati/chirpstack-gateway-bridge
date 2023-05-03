@@ -76,6 +76,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Handle request here
 
+	var newline []byte
+	newline = []byte("\n")
 	response := map[string]string{
 		"status": "ok",
 	}
@@ -84,6 +86,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	jsonResponse = append(jsonResponse, newline...)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
