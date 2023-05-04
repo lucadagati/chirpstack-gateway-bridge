@@ -19,22 +19,17 @@ type Body struct {
 }
 
 var (
-	NsIpAddress   = ""     // Network Server IP address TODO: get parameter (broker_ip_h_ns) through API request
-	AddedBroker   = ""     // Added broker IP address TODO: get parameter (added_broker) through API request
-	GWid          = ""     // Gateway ID TODO: get parameter (gwid_token) through API request
-	GwidTopicName = ""     // Topic name TODO: get parameter (gwid_token) through API request
-	port          = "3000" // Server listener port
+	NsIpAddress   = ""     // (Home) Network Server IP address
+	AddedBroker   = ""     // Added broker IP address
+	GWid          = ""     // Gateway ID
+	GwidTopicName = ""     // Topic name
+	port          = "3000" // API listener port
 )
 
 // Launch starts the API
 func Launch() func() error {
 	return func() error {
 		go startListener(port)
-
-		// DEBUG
-		// go subscribeToTopic("gateway/+/event/up")
-		// go subscribeToTopic("gateway/+/event/stats")
-		// go subscribeToTopic("gateway/+/state/conn")
 		return nil
 	}
 }
@@ -42,7 +37,7 @@ func Launch() func() error {
 // startListener start a Listener on specified port to serve requests
 func startListener(port string) {
 	http.HandleFunc("/", handleRequest)
-	log.Printf("Listening on port %s...\n", port)
+	log.Printf("API listening on port %s...\n", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 }
 
@@ -108,12 +103,6 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 	var payloadMap map[string]interface{}
 	if err := json.Unmarshal([]byte(payload), &payloadMap); err != nil {
 		log.WithError(err).Warn("Failed to parse payload as JSON")
-		/* log.WithFields(log.Fields{
-			"package": "mqtt",
-			"topic":   msg.Topic(),
-			"payload": payload,
-			"error":   err.Error(),
-		}).Warn("Failed to parse payload as JSON") */
 	} else {
 		if len(payload) > 0 {
 			log.WithFields(log.Fields{
@@ -124,6 +113,7 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 		}
 	}
 
+	// Replace gatewayID with GWid received through API
 	modifyMap(payloadMap, "gatewayID", GWid)
 	payloadBytes, err := json.Marshal(payloadMap)
 	if err != nil {
