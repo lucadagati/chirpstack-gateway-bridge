@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 )
 
 type Body struct {
@@ -26,6 +27,8 @@ var (
 	port          = "3000" // API listener port
 )
 
+var clients []mqtt.Client
+
 // Launch starts the API
 func Launch() func() error {
 	return func() error {
@@ -41,24 +44,25 @@ func startListener(port string) {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 }
 
-// handleRequest handles API POST requests, taking a JSON object with three parameters:
+// handleRequest handles API POST requests, receiving a JSON object with three parameters:
 // added_broker (AddedBroker), broker_ip_h_ns (BrokerIPHNS), gwid_token (GWIDToken)
 func handleRequest(w http.ResponseWriter, r *http.Request) {
+	// Check if request method is POST
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
+	// Decode body request
 	var b Body
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	log.Printf("Received request with added_broker=%s, broker_ip_h_ns=%s, gwid_token=%s\n",
 		b.AddedBroker, b.BrokerIPHNS, b.GWIDToken)
 
-	// Assignment
+	// Assign each JSON object's field to the respective variable
 	NsIpAddress = b.BrokerIPHNS
 	AddedBroker = b.AddedBroker
 	GWid = b.GWIDToken
@@ -69,8 +73,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		"topic": GwidTopicName,
 	}).Info("IP: " + NsIpAddress + "\nGWid: " + GWid + "\nTopic name: " + GwidTopicName)
 
-	// TODO: Handle request here
-
+	// Print a response
 	var newline []byte
 	newline = []byte("\n")
 	response := map[string]string{
@@ -82,14 +85,30 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse = append(jsonResponse, newline...)
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
 
+	// If exist, disconnect and remove previous client instances
+	if len(clients) > 0 {
+		for _, c := range clients {
+			c.Disconnect(250)
+		}
+		clients = clients[3:]
+	}
+
+	// Start a separated thread for each topic
 	go subscribeToTopic("gateway/+/event/up")
 	go subscribeToTopic("gateway/+/event/stats")
 	go subscribeToTopic("gateway/+/state/conn")
+
+	// Print clients details
+	time.Sleep(3 * time.Second)
+	for i, c := range clients {
+		reader := c.OptionsReader()
+		fmt.Printf("Client %d options: %v\n", i, reader.Servers())
+	}
+
 }
 
 // onMessage handles incoming MQTT messages from a broker. It first decodes the message payload and
@@ -207,6 +226,9 @@ func subscribeToTopic(topic string) {
 	// Create a new MQTT client instance
 	clientOpts := mqtt.NewClientOptions().AddBroker(AddedBroker)
 	client := mqtt.NewClient(clientOpts)
+
+	// Add the client to the slice
+	clients = append(clients, client)
 
 	// Connect to the MQTT broker
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
