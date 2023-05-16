@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/brocaar/chirpstack-gateway-bridge/internal/api"
+	"github.com/brocaar/chirpstack-gateway-bridge/api"
 	"os"
 	"os/signal"
 	"syscall"
