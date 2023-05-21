@@ -91,6 +91,7 @@ func Execute(v string) {
 
 func initConfig() {
 	if cfgFile != "" {
+		log.WithField("config", cfgFile).Info("Loaded config file")
 		b, err := ioutil.ReadFile(cfgFile)
 		if err != nil {
 			log.WithError(err).WithField("config", cfgFile).Fatal("error loading config file")
@@ -112,6 +113,8 @@ func initConfig() {
 				log.WithError(err).Fatal("read configuration file error")
 			}
 		}
+		cfgFile = viper.ConfigFileUsed()
+		log.WithField("config", cfgFile).Info("Loaded config file")
 	}
 
 	for _, pair := range os.Environ() {
