@@ -173,8 +173,8 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 	}
 
 	// Publish message to NS and print details
-	clientOpts := mqtt.NewClientOptions().AddBroker(NsIpAddress)
-	publishClient := mqtt.NewClient(clientOpts)
+	publishOpts := mqtt.NewClientOptions().AddBroker(NsIpAddress).SetClientID("MQTT_Forwarder_Target")
+	publishClient := mqtt.NewClient(publishOpts)
 	if token := publishClient.Connect(); token.Wait() && token.Error() != nil {
 		log.WithFields(log.Fields{
 			"package": "mqtt",
@@ -204,8 +204,11 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 
 // subscribeToTopic subscribes an MQTT client to a specific topic
 func subscribeToTopic(topic string) {
+	// Define new MQTT client options
+	clientOpts := mqtt.NewClientOptions().AddBroker(AddedBroker).SetClientID("MQTT_Forwarder")
+	clientOpts.SetDefaultPublishHandler(onMessage)
+
 	// Create a new MQTT client instance
-	clientOpts := mqtt.NewClientOptions().AddBroker(AddedBroker)
 	client := mqtt.NewClient(clientOpts)
 
 	// Connect to the MQTT broker
@@ -214,7 +217,7 @@ func subscribeToTopic(topic string) {
 	}
 
 	// Subscribe to the specified topic
-	if token := client.Subscribe(topic, 0, onMessage); token.Wait() && token.Error() != nil {
+	if token := client.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
 		log.WithError(token.Error()).Fatal("error subscribing to topic")
 	}
 
