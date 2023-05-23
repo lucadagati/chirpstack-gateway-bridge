@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -125,7 +126,6 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 	// Get topic name and type
 	topicName := strings.Split(msg.Topic(), "/")[1]
 	topicType := strings.Split(msg.Topic(), "/")[len(strings.Split(msg.Topic(), "/"))-1]
-	log.Println(msg.Topic())
 	newTopic := strings.Replace(msg.Topic(), topicName, GwidTopicName, 1)
 
 	// Handle different topic types
@@ -146,9 +146,15 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 			return
 		}
 		if payloadMap["phyPayload"] != nil {
-			payloadPHY := payloadMap["phyPayload"].(string)
-			decodedPacket := getDevAddr([]byte(payloadPHY))
-			log.Println("Decoded packet devAddr:", decodedPacket)
+			// extract physical payload from map and convert
+			payloadPHY :=  payloadMap["phyPayload"].(string)
+			
+			// decode base64 payloadPHY
+			decodedPhyPayload, _ := base64.StdEncoding.DecodeString(payloadPHY)
+			
+			// get device address from decoded packet
+			devAddr := getDevAddr([]byte(decodedPhyPayload))
+			log.Printf("Decoded packet's DevAddr: %x\n", devAddr)
 		}
 	} else if topicType == "stats" {
 		log.WithFields(log.Fields{
@@ -204,11 +210,9 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 
 // subscribeToTopic subscribes an MQTT client to a specific topic
 func subscribeToTopic(topic string) {
-	// Define new MQTT client options
-	clientOpts := mqtt.NewClientOptions().AddBroker(AddedBroker).SetClientID("MQTT_Forwarder")
-	clientOpts.SetDefaultPublishHandler(onMessage)
-
 	// Create a new MQTT client instance
+	clientOpts := mqtt.NewClientOptions().AddBroker(AddedBroker)
+	clientOpts.SetDefaultPublishHandler(onMessage)
 	client := mqtt.NewClient(clientOpts)
 
 	// Connect to the MQTT broker
