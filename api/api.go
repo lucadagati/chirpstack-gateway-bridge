@@ -147,13 +147,13 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 		}
 		if payloadMap["phyPayload"] != nil {
 			// extract physical payload from map and convert
-			payloadPHY :=  payloadMap["phyPayload"].(string)
-			
+			payloadPHY := payloadMap["phyPayload"].(string)
+
 			// decode base64 payloadPHY
 			decodedPhyPayload, _ := base64.StdEncoding.DecodeString(payloadPHY)
-			
+
 			// get device address from decoded packet
-			devAddr := getDevAddr([]byte(decodedPhyPayload))
+			devAddr := getDevAddr(decodedPhyPayload)
 			log.Printf("Decoded packet's DevAddr: %x\n", devAddr)
 		}
 	} else if topicType == "stats" {
@@ -212,7 +212,6 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 func subscribeToTopic(topic string) {
 	// Create a new MQTT client instance
 	clientOpts := mqtt.NewClientOptions().AddBroker(AddedBroker)
-	clientOpts.SetDefaultPublishHandler(onMessage)
 	client := mqtt.NewClient(clientOpts)
 
 	// Connect to the MQTT broker
@@ -221,7 +220,7 @@ func subscribeToTopic(topic string) {
 	}
 
 	// Subscribe to the specified topic
-	if token := client.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
+	if token := client.Subscribe(topic, 0, onMessage); token.Wait() && token.Error() != nil {
 		log.WithError(token.Error()).Fatal("error subscribing to topic")
 	}
 
