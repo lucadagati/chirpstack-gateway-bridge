@@ -1,6 +1,7 @@
 package api
 
 import (
+        "encoding/hex"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -115,7 +116,13 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 	}
 
 	// Replace gatewayID with GWid received through API
-	modifyMap(payloadMap, "gatewayID", GWid)
+	decodedGWid, err := hex.DecodeString(GWid)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	base64GWid := base64.StdEncoding.EncodeToString(decodedGWid)
+	modifyMap(payloadMap, "gatewayID", base64GWid)
 	payloadBytes, err := json.Marshal(payloadMap)
 	if err != nil {
 		log.Println(err)
