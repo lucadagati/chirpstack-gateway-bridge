@@ -1,6 +1,20 @@
-# ChirpStack Gateway Bridge
+# Run the service
 
-![Tests](https://github.com/brocaar/chirpstack-gateway-bridge/actions/workflows/main.yml/badge.svg?branch=master)
+It's recommended to clone the repository in your home directory to avoid configuration problems. <br>
+Path should be like this:
+``` $HOME/chirpstack-gateway-bridge ```
+
+Service can be started in two ways:
+1. ``` $ go run cmd/chirpstack-gateway-bridge/main.go ```
+2. ``` $ ./run.sh ```
+
+Note that the configuration file ``` chirpstack-gateway-bridge.toml ``` is located under ``` packaging/files/ ```. <br>
+If the repository has been cloned to a location other than the home directory, you will need to specify the configuration file manually. <br>
+
+For example, if you cloned the repository in your desktop, you should run the following command to start the service: <br>
+``` $ ./run.sh -c $HOME/Desktop/chirpstack-gateway-bridge/packaging/files/chirpstack-gateway-bridge.toml ```
+
+# ChirpStack Gateway Bridge
 
 ChirpStack Gateway Bridge is a service which converts LoRa<sup>&reg;</sup> Packet Forwarder protocols
 into a ChirpStack Network Server [common data-format](https://github.com/brocaar/chirpstack-api/blob/master/protobuf/gw/gw.proto) (JSON and Protobuf).
