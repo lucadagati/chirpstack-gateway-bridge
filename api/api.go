@@ -1,18 +1,18 @@
 package api
 
 import (
-        "encoding/hex"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
+
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	log "github.com/sirupsen/logrus"
-	"net/http"
-	"os"
-	"os/signal"
-	"strings"
-	"syscall"
 )
+
+var mqttClient mqtt.Client
 
 type Body struct {
 	AddedBroker string `json:"added_broker"`
@@ -43,6 +43,23 @@ func startListener(port string) {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 }
 
+// Modifica la funzione initMQTTClient per prendere l'indirizzo del broker come parametro
+func initMQTTClient(brokerAddress string) {
+	if brokerAddress == "" {
+		log.Fatal("Indirizzo broker MQTT mancante")
+		return
+	}
+
+	clientOpts := mqtt.NewClientOptions().AddBroker(brokerAddress)
+	clientOpts.SetAutoReconnect(true)
+	clientOpts.SetCleanSession(true)
+	mqttClient = mqtt.NewClient(clientOpts)
+
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		log.WithError(token.Error()).Fatal("Errore nella connessione al broker MQTT")
+	}
+}
+
 // handleRequest handles API POST requests, taking a JSON object with three parameters:
 // added_broker (AddedBroker), broker_ip_h_ns (BrokerIPHNS), gwid_token (GWIDToken)
 func handleRequest(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +88,9 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		"topic": GwidTopicName,
 	}).Info("IP: " + NsIpAddress + "\nGWid: " + GWid + "\nTopic name: " + GwidTopicName)
 
-	// TODO: Handle request here
+	// Prima di inizializzare il client MQTT, impostare l'indirizzo del broker
+	AddedBroker = b.AddedBroker
+	initMQTTClient(AddedBroker)
 
 	var newline []byte
 	newline = []byte("\n")
@@ -111,7 +130,7 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 				"package": "mqtt",
 				"topic":   msg.Topic(),
 				"payload": payload,
-			}).Info("Received message on topic: " + msg.Topic() + " with payload: " + payload)
+			}).Info("Received message on topic: " + msg.Topic() /* + " with payload: " + payload*/)
 		}
 	}
 
@@ -162,6 +181,16 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 			// get device address from decoded packet
 			devAddr := getDevAddr(decodedPhyPayload)
 			log.Printf("Decoded packet's DevAddr: %x\n", devAddr)
+
+			// Calculate and print NetID
+			netID := calculateNetID(devAddr)
+			log.Printf("Calculated NetID: %x\n", netID)
+
+			// Forwarda il messaggio solo se il NetID calcolato è 01
+			if fmt.Sprintf("%x", netID) != "01" {
+				log.Info("Il NetID è dell'homeNS, il messaggio non verrà inoltrato")
+				return
+			}
 		}
 	} else if topicType == "stats" {
 		log.WithFields(log.Fields{
@@ -210,37 +239,26 @@ func onMessage(client mqtt.Client, msg mqtt.Message) {
 		"package": "mqtt",
 		"topic":   msg.Topic(),
 		"payload": payload,
-	}).Info("Forwarded message on topic: " + newTopic + " with payload: " + payload)
+	}).Info("Forwarded message on topic: " + newTopic /* + " with payload: " + payload*/)
 
 	publishClient.Disconnect(250)
 }
 
 // subscribeToTopic subscribes an MQTT client to a specific topic
 func subscribeToTopic(topic string) {
-	// Create a new MQTT client instance
-	clientOpts := mqtt.NewClientOptions().AddBroker(AddedBroker)
-	client := mqtt.NewClient(clientOpts)
-
-	// Connect to the MQTT broker
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		log.WithError(token.Error()).Fatal("error connecting to MQTT broker")
+	if mqttClient == nil {
+		log.Error("Client MQTT non inizializzato")
+		return
 	}
 
-	// Subscribe to the specified topic
-	if token := client.Subscribe(topic, 0, onMessage); token.Wait() && token.Error() != nil {
-		log.WithError(token.Error()).Fatal("error subscribing to topic")
+	if !mqttClient.IsConnected() {
+		log.Error("Client MQTT non connesso")
+		return
 	}
 
-	// Wait for a signal to exit
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	<-sig
-
-	// Unsubscribe from the topic
-	client.Unsubscribe(topic)
-
-	// Disconnect from MQTT broker
-	client.Disconnect(250)
+	if token := mqttClient.Subscribe(topic, 0, onMessage); token.Wait() && token.Error() != nil {
+		log.WithError(token.Error()).Fatal("Errore nella sottoscrizione al topic")
+	}
 }
 
 // getDevAddr takes a byte slice phyPayload as input, extracts a specific part of it
@@ -285,4 +303,15 @@ func modifyMap(payloadMap interface{}, key string, value string) {
 			modifyMap(v, key, value)
 		}
 	}
+}
+
+// calculateNetID calculates the NetID from a given DevAddr
+func calculateNetID(devAddr []byte) []byte {
+	if len(devAddr) != 4 {
+		log.Errorf("Invalid DevAddr length: %d", len(devAddr))
+		return nil
+	}
+	// NetID is the most significant 7 bits of the DevAddr
+	netID := devAddr[0] >> 1
+	return []byte{netID}
 }
